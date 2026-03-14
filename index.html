@@ -206,13 +206,131 @@
       .footer-text { font-size: 10px; right: 5px; bottom: 5px; max-width: 90%; white-space: normal; text-align: right; }
     }
 
+    /* === LOGIN SCREEN === */
+    #loginScreen {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 20% 20%, #0a0a0a, #000);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    .login-box {
+      background: rgba(0,255,0,0.04);
+      border: 1px solid rgba(0,255,0,0.3);
+      border-radius: 16px;
+      padding: 36px 30px;
+      width: 320px;
+      max-width: 90vw;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(0,255,0,0.1);
+    }
+    .login-logo {
+      width: 70px;
+      margin-bottom: 14px;
+    }
+    .login-title {
+      font-size: 20px;
+      color: #00ff00;
+      text-shadow: 0 0 8px #00ff00;
+      margin-bottom: 6px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    .login-subtitle {
+      font-size: 11px;
+      color: rgba(0,255,0,0.5);
+      margin-bottom: 24px;
+      letter-spacing: 1px;
+    }
+    .key-input-wrap {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    #keyInput {
+      width: 100%;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(0,255,0,0.35);
+      border-radius: 8px;
+      color: #00ff00;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      padding: 10px 40px 10px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      letter-spacing: 1px;
+    }
+    #keyInput:focus {
+      border-color: #00ff00;
+      box-shadow: 0 0 10px rgba(0,255,0,0.25);
+    }
+    #toggleKeyVis {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: rgba(0,255,0,0.5);
+      font-size: 14px;
+      user-select: none;
+    }
+    #loginBtn {
+      width: 100%;
+      background: linear-gradient(90deg, #005500, #00aa00);
+      color: #fff;
+      border: 1px solid #00ff00;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 2px;
+      transition: 0.2s;
+      box-shadow: 0 0 12px rgba(0,255,0,0.2);
+    }
+    #loginBtn:hover { filter: brightness(1.15); }
+    #loginBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+    #loginStatus {
+      margin-top: 14px;
+      font-size: 12px;
+      min-height: 18px;
+      letter-spacing: 1px;
+    }
+    .status-loading { color: #ffff00; }
+    .status-error   { color: #ff4444; }
+    .status-ok      { color: #00ff00; }
+    .login-footer {
+      margin-top: 20px;
+      font-size: 10px;
+      color: rgba(0,255,0,0.25);
+      letter-spacing: 1px;
+    }
   </style>
 </head>
 <body>
   <iframe id="fullscreenIframe" src="https://web.sunwin.id/?affId=Sunwin" name="fullscreenIframe"></iframe>
 
-  <div class="panel unlocked">
-    <button id="activateBtn" class="btn">Kích Hoạt</button>
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen">
+    <div class="login-box">
+      <img src="https://i.postimg.cc/QC0Lcx3F/B2D88ED8-8C0D-4296-ACC2-A039952593EC.png" alt="Logo" class="login-logo">
+      <div class="login-title">⚡ XÁC THỰC KEY ⚡</div>
+      <div class="login-subtitle">Nhập key để truy cập hệ thống</div>
+      <div class="key-input-wrap">
+        <input type="password" id="keyInput" placeholder="Nhập key của bạn..." autocomplete="off" spellcheck="false">
+        <span id="toggleKeyVis" title="Hiện/ẩn key">👁</span>
+      </div>
+      <button id="loginBtn">ĐĂNG NHẬP</button>
+      <div id="loginStatus"></div>
+      <div class="login-footer">POWERED BY AI MASTER SYSTEM</div>
+    </div>
+  </div>
+  <div class="panel">
+    <button id="activateBtn" class="btn" disabled style="display:none;">Kích Hoạt</button>
+
   </div>
   
   <div id="predictionPopup" class="prediction-box" role="dialog" aria-hidden="true">
@@ -228,14 +346,211 @@
     <span class="close-btn">✖</span>
   </div>
 
-  <div class="footer-text unlocked">
+  <div class="footer-text">
     <div id="footerInfo" class="blinking-text">
       Phiên: --- | Dự Đoán: --- | Độ Tin Cậy: ---
     </div>
   </div>
   <script>
-  // Login removed - direct access
+  /* ===== LOGIN / KEY VERIFICATION LOGIC ===== */
+  (function() {
+    const LOGIN_KEY = 'sw_auth_key';
+    const LS_API = 'https://key-admin-sew.onrender.com';
+    const loginScreen = document.getElementById('loginScreen');
+    const keyInput    = document.getElementById('keyInput');
+    const loginBtn    = document.getElementById('loginBtn');
+    const loginStatus = document.getElementById('loginStatus');
+    const toggleVis   = document.getElementById('toggleKeyVis');
+    const activateBtn = document.getElementById('activateBtn');
 
+    // Tạo Device ID
+    function getDeviceId() {
+      let id = localStorage.getItem('_sw_did');
+      if (!id) {
+        id = 'SW-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
+        localStorage.setItem('_sw_did', id);
+      }
+      return id;
+    }
+
+    // Lấy tên device
+    function getDeviceName() {
+      const ua = navigator.userAgent;
+      if (/iPhone/.test(ua)) return 'iPhone';
+      if (/iPad/.test(ua)) return 'iPad';
+      if (/Android/.test(ua)) return 'Android';
+      if (/Windows/.test(ua)) return 'Windows PC';
+      if (/Mac/.test(ua)) return 'MacOS';
+      return 'Browser';
+    }
+
+    // Format ngày tháng
+    function formatDate(d) {
+      if (!d) return 'Vĩnh viễn';
+      return new Date(d).toLocaleDateString('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    // Format loại key
+    function formatType(t) {
+      return { day: '1 Ngày', week: '1 Tuần', month: '1 Tháng', lifetime: 'Vĩnh Viễn' }[t] || t || '—';
+    }
+
+    // Không xóa session khi load - để checkSession() có thể phục hồi đăng nhập
+    console.log('[KEY-AUTH] App loaded, checking session...');
+
+    // Hiện/ẩn key
+    toggleVis.addEventListener('click', () => {
+      keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+    });
+
+    loginBtn.addEventListener('click', () => {
+      const key = keyInput.value.trim().toUpperCase();
+      if (!key) {
+        showStatus('⚠ Vui lòng nhập key!', 'error');
+        return;
+      }
+      verifyKey(key);
+    });
+
+    keyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loginBtn.click();
+    });
+
+    async function verifyKey(key) {
+      loginBtn.disabled = true;
+      showStatus('🔄 Đang xác thực...', 'loading');
+
+      try {
+        const deviceId = getDeviceId();
+        const deviceName = getDeviceName();
+
+        console.log('[KEY-AUTH] Verifying with:', { key, deviceId, deviceName });
+
+        const res = await fetch(LS_API + '/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: key, deviceId: deviceId, deviceName: deviceName })
+        });
+
+        const data = await res.json();
+        console.log('[KEY-AUTH] Response:', data);
+
+        if (!data.success) {
+          showStatus('❌ ' + (data.message || 'Key không hợp lệ hoặc đã hết hạn!'), 'error');
+          loginBtn.disabled = false;
+          return;
+        }
+
+        // Xác thực thành công
+        const user = data.user || {};
+        showStatus('✅ Xác thực thành công!', 'ok');
+        
+        // Lưu session
+        localStorage.setItem(LOGIN_KEY, JSON.stringify({
+          key: key,
+          deviceId: deviceId,
+          verifiedAt: Date.now(),
+          expiresAt: user.expiresAt,
+          user: user
+        }));
+
+        // Mở giao diện
+        document.querySelector('.panel').classList.add('unlocked');
+        document.querySelector('.footer-text').classList.add('unlocked');
+        
+        activateBtn.disabled = false;
+        activateBtn.style.display = 'block';
+        activateBtn.style.opacity = '1';
+        activateBtn.style.cursor = 'pointer';
+
+        setTimeout(() => {
+          loginScreen.style.opacity = '0';
+          loginScreen.style.transition = 'opacity 0.5s';
+          setTimeout(() => loginScreen.style.display = 'none', 500);
+        }, 700);
+
+      } catch(e) {
+        console.error('[KEY-AUTH] Error:', e.message);
+        showStatus('❌ Lỗi kết nối: ' + e.message, 'error');
+        loginBtn.disabled = false;
+      }
+    }
+
+    // Kiểm tra session cũ
+    async function checkSession() {
+      const saved = localStorage.getItem(LOGIN_KEY);
+      if (!saved) return;
+
+      try {
+        const sess = JSON.parse(saved);
+        // Check hết hạn
+        if (sess.expiresAt && Date.now() > new Date(sess.expiresAt).getTime()) {
+          localStorage.removeItem(LOGIN_KEY);
+          return;
+        }
+
+        const deviceId = getDeviceId();
+        const deviceName = getDeviceName();
+
+        // Verify session với server
+        const res = await fetch(LS_API + '/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: sess.key, deviceId: deviceId, deviceName: deviceName })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // Session vẫn hợp lệ, vào luôn
+          loginScreen.style.opacity = '0';
+          loginScreen.style.transition = 'opacity 0.5s';
+          setTimeout(() => {
+            loginScreen.style.display = 'none';
+            document.querySelector('.panel').classList.add('unlocked');
+            document.querySelector('.footer-text').classList.add('unlocked');
+            activateBtn.disabled = false;
+            activateBtn.style.display = 'block';
+            activateBtn.style.opacity = '1';
+            activateBtn.style.cursor = 'pointer';
+          }, 500);
+        } else {
+          localStorage.removeItem(LOGIN_KEY);
+        }
+      } catch(e) {
+        // Nếu mất kết nối nhưng session chưa hết hạn, cho vào
+        try {
+          const sess = JSON.parse(localStorage.getItem(LOGIN_KEY));
+          if (!sess.expiresAt || Date.now() < new Date(sess.expiresAt).getTime()) {
+            loginScreen.style.opacity = '0';
+            loginScreen.style.transition = 'opacity 0.5s';
+            setTimeout(() => {
+              loginScreen.style.display = 'none';
+              document.querySelector('.panel').classList.add('unlocked');
+              document.querySelector('.footer-text').classList.add('unlocked');
+              activateBtn.disabled = false;
+              activateBtn.style.display = 'block';
+              activateBtn.style.opacity = '1';
+              activateBtn.style.cursor = 'pointer';
+            }, 500);
+          }
+        } catch(e2) {}
+      }
+    }
+
+    function showStatus(msg, type) {
+      loginStatus.textContent = msg;
+      loginStatus.className = '';
+      if (type === 'loading') loginStatus.classList.add('status-loading');
+      if (type === 'error')   loginStatus.classList.add('status-error');
+      if (type === 'ok')      loginStatus.classList.add('status-ok');
+    }
+
+    // Kiểm tra session khi load
+    window.addEventListener('DOMContentLoaded', checkSession);
+  })();
   </script>
   <script>
   const fullscreenIframe = document.getElementById('fullscreenIframe');
@@ -253,8 +568,8 @@
   let blinkIntervalId = null; 
   let currentSessionId = null; // Biến lưu trữ phiên hiện tại từ API
   let isAwaitingNewSession = false; // Biến cờ để ngăn fetchPrediction() gọi startPredictionBlink() trong thời gian chờ 6 giây
-  // Đã cập nhật URL API mới
-  const API_URL = 'https://sunlaymaynkx.hacksieucap.pro/ttsunver2?t=1771672905088'; 
+  // Đã cập nhật URL API mới theo JSON
+  const API_URL = 'https://apisunlonv2.onrender.com/sunlon'; 
 
   /* --- API & Prediction Logic --- */
 
@@ -373,7 +688,9 @@
       // Xử lý cấu trúc JSON mới
       let nextSessionId;
 
-      if (data.phien_dudoan) {
+      if (data.phien_du_doan) {
+          nextSessionId = data.phien_du_doan;
+      } else if (data.phien_dudoan) {
           nextSessionId = data.phien_dudoan;
       } else if (data.phien) {
           nextSessionId = data.phien + 1;
@@ -403,10 +720,12 @@
           displayPrediction = predictedResult === 'T' ? 'Tài' : 'Xỉu';
           
           // Sửa tỉ lệ theo tỉ lệ của api
-          const rawConfidence = (isObject ? (predObj.ti_le || predObj.do_tin_cay || predObj.win_rate || predObj.confidence) : (data.ti_le || data.do_tin_cay_ai || data.win_rate));
+          const rawConfidence = (isObject ? (predObj.ti_le || predObj.do_tin_cay || predObj.win_rate || predObj.confidence) : (data.do_tin_cay || data.ti_le || data.do_tin_cay_ai || data.win_rate));
           displayConfidence = rawConfidence ? (String(rawConfidence).includes('%') ? rawConfidence : rawConfidence + '%') : '85%';
           
-          if (data.loai_cau && data.loai_cau.mo_ta) {
+          if (data.pattern) {
+              displayStrategy = `AI: ${String(data.pattern).replace(/_/g, ' ')}`;
+          } else if (data.loai_cau && data.loai_cau.mo_ta) {
               displayStrategy = `AI: ${data.loai_cau.mo_ta}`;
           } else if (isObject && predObj.chi_tiet) {
               displayStrategy = `AI: ${predObj.chi_tiet}`;
@@ -517,6 +836,11 @@
   }
 
   activateBtn.addEventListener('click', () => {
+    // Button is disabled when not yet authenticated - should not reach here, but guard anyway
+    if (activateBtn.disabled) {
+      return; // Không làm gì khi chưa xác thực
+    }
+
     if (activateBtn.textContent.trim() === 'AI ACTIVATED') {
       // Đã kích hoạt rồi, không cho kích hoạt lại
       return;
