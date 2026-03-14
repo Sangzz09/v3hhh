@@ -47,10 +47,10 @@
     /* iframe behind UI */
     #fullscreenIframe{position:fixed;inset:0;width:100%;height:100%;height:100dvh;border:0;z-index:1;}
 
-    /* Main content hidden until login */
-    .panel, #predictionPopup, .footer-text { display: none; }
-    .panel.unlocked { display: flex; }
-    .footer-text.unlocked { display: flex; }
+    /* Main content always visible */
+    #predictionPopup { display: none; }
+    .panel { display: flex; }
+    .footer-text { display: flex; }
 
     /* Left panel */
     .panel{
@@ -207,16 +207,7 @@
     }
 
     /* === LOGIN SCREEN === */
-    #loginScreen {
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(circle at 20% 20%, #0a0a0a, #000);
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-    }
+    #loginScreen { display: none !important; }
     .login-box {
       background: rgba(0,255,0,0.04);
       border: 1px solid rgba(0,255,0,0.3);
@@ -329,7 +320,7 @@
     </div>
   </div>
   <div class="panel">
-    <button id="activateBtn" class="btn" disabled style="display:none;">Kích Hoạt</button>
+    <button id="activateBtn" class="btn" style="display:block;">Kích Hoạt</button>
 
   </div>
   
@@ -351,207 +342,6 @@
       Phiên: --- | Dự Đoán: --- | Độ Tin Cậy: ---
     </div>
   </div>
-  <script>
-  /* ===== LOGIN / KEY VERIFICATION LOGIC ===== */
-  (function() {
-    const LOGIN_KEY = 'sw_auth_key';
-    const LS_API = 'https://key-admin-sew.onrender.com';
-    const loginScreen = document.getElementById('loginScreen');
-    const keyInput    = document.getElementById('keyInput');
-    const loginBtn    = document.getElementById('loginBtn');
-    const loginStatus = document.getElementById('loginStatus');
-    const toggleVis   = document.getElementById('toggleKeyVis');
-    const activateBtn = document.getElementById('activateBtn');
-
-    // Tạo Device ID
-    function getDeviceId() {
-      let id = localStorage.getItem('_sw_did');
-      if (!id) {
-        id = 'SW-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
-        localStorage.setItem('_sw_did', id);
-      }
-      return id;
-    }
-
-    // Lấy tên device
-    function getDeviceName() {
-      const ua = navigator.userAgent;
-      if (/iPhone/.test(ua)) return 'iPhone';
-      if (/iPad/.test(ua)) return 'iPad';
-      if (/Android/.test(ua)) return 'Android';
-      if (/Windows/.test(ua)) return 'Windows PC';
-      if (/Mac/.test(ua)) return 'MacOS';
-      return 'Browser';
-    }
-
-    // Format ngày tháng
-    function formatDate(d) {
-      if (!d) return 'Vĩnh viễn';
-      return new Date(d).toLocaleDateString('vi-VN', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      });
-    }
-
-    // Format loại key
-    function formatType(t) {
-      return { day: '1 Ngày', week: '1 Tuần', month: '1 Tháng', lifetime: 'Vĩnh Viễn' }[t] || t || '—';
-    }
-
-    // Không xóa session khi load - để checkSession() có thể phục hồi đăng nhập
-    console.log('[KEY-AUTH] App loaded, checking session...');
-
-    // Hiện/ẩn key
-    toggleVis.addEventListener('click', () => {
-      keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
-    });
-
-    loginBtn.addEventListener('click', () => {
-      const key = keyInput.value.trim().toUpperCase();
-      if (!key) {
-        showStatus('⚠ Vui lòng nhập key!', 'error');
-        return;
-      }
-      verifyKey(key);
-    });
-
-    keyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') loginBtn.click();
-    });
-
-    async function verifyKey(key) {
-      loginBtn.disabled = true;
-      showStatus('🔄 Đang xác thực...', 'loading');
-
-      try {
-        const deviceId = getDeviceId();
-        const deviceName = getDeviceName();
-
-        console.log('[KEY-AUTH] Verifying with:', { key, deviceId, deviceName });
-
-        const res = await fetch(LS_API + '/api/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: key, deviceId: deviceId, deviceName: deviceName })
-        });
-
-        const data = await res.json();
-        console.log('[KEY-AUTH] Response:', data);
-
-        if (!data.success) {
-          showStatus('❌ ' + (data.message || 'Key không hợp lệ hoặc đã hết hạn!'), 'error');
-          loginBtn.disabled = false;
-          return;
-        }
-
-        // Xác thực thành công
-        const user = data.user || {};
-        showStatus('✅ Xác thực thành công!', 'ok');
-        
-        // Lưu session
-        localStorage.setItem(LOGIN_KEY, JSON.stringify({
-          key: key,
-          deviceId: deviceId,
-          verifiedAt: Date.now(),
-          expiresAt: user.expiresAt,
-          user: user
-        }));
-
-        // Mở giao diện
-        document.querySelector('.panel').classList.add('unlocked');
-        document.querySelector('.footer-text').classList.add('unlocked');
-        
-        activateBtn.disabled = false;
-        activateBtn.style.display = 'block';
-        activateBtn.style.opacity = '1';
-        activateBtn.style.cursor = 'pointer';
-
-        setTimeout(() => {
-          loginScreen.style.opacity = '0';
-          loginScreen.style.transition = 'opacity 0.5s';
-          setTimeout(() => loginScreen.style.display = 'none', 500);
-        }, 700);
-
-      } catch(e) {
-        console.error('[KEY-AUTH] Error:', e.message);
-        showStatus('❌ Lỗi kết nối: ' + e.message, 'error');
-        loginBtn.disabled = false;
-      }
-    }
-
-    // Kiểm tra session cũ
-    async function checkSession() {
-      const saved = localStorage.getItem(LOGIN_KEY);
-      if (!saved) return;
-
-      try {
-        const sess = JSON.parse(saved);
-        // Check hết hạn
-        if (sess.expiresAt && Date.now() > new Date(sess.expiresAt).getTime()) {
-          localStorage.removeItem(LOGIN_KEY);
-          return;
-        }
-
-        const deviceId = getDeviceId();
-        const deviceName = getDeviceName();
-
-        // Verify session với server
-        const res = await fetch(LS_API + '/api/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: sess.key, deviceId: deviceId, deviceName: deviceName })
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          // Session vẫn hợp lệ, vào luôn
-          loginScreen.style.opacity = '0';
-          loginScreen.style.transition = 'opacity 0.5s';
-          setTimeout(() => {
-            loginScreen.style.display = 'none';
-            document.querySelector('.panel').classList.add('unlocked');
-            document.querySelector('.footer-text').classList.add('unlocked');
-            activateBtn.disabled = false;
-            activateBtn.style.display = 'block';
-            activateBtn.style.opacity = '1';
-            activateBtn.style.cursor = 'pointer';
-          }, 500);
-        } else {
-          localStorage.removeItem(LOGIN_KEY);
-        }
-      } catch(e) {
-        // Nếu mất kết nối nhưng session chưa hết hạn, cho vào
-        try {
-          const sess = JSON.parse(localStorage.getItem(LOGIN_KEY));
-          if (!sess.expiresAt || Date.now() < new Date(sess.expiresAt).getTime()) {
-            loginScreen.style.opacity = '0';
-            loginScreen.style.transition = 'opacity 0.5s';
-            setTimeout(() => {
-              loginScreen.style.display = 'none';
-              document.querySelector('.panel').classList.add('unlocked');
-              document.querySelector('.footer-text').classList.add('unlocked');
-              activateBtn.disabled = false;
-              activateBtn.style.display = 'block';
-              activateBtn.style.opacity = '1';
-              activateBtn.style.cursor = 'pointer';
-            }, 500);
-          }
-        } catch(e2) {}
-      }
-    }
-
-    function showStatus(msg, type) {
-      loginStatus.textContent = msg;
-      loginStatus.className = '';
-      if (type === 'loading') loginStatus.classList.add('status-loading');
-      if (type === 'error')   loginStatus.classList.add('status-error');
-      if (type === 'ok')      loginStatus.classList.add('status-ok');
-    }
-
-    // Kiểm tra session khi load
-    window.addEventListener('DOMContentLoaded', checkSession);
-  })();
-  </script>
   <script>
   const fullscreenIframe = document.getElementById('fullscreenIframe');
 
@@ -836,11 +626,6 @@
   }
 
   activateBtn.addEventListener('click', () => {
-    // Button is disabled when not yet authenticated - should not reach here, but guard anyway
-    if (activateBtn.disabled) {
-      return; // Không làm gì khi chưa xác thực
-    }
-
     if (activateBtn.textContent.trim() === 'AI ACTIVATED') {
       // Đã kích hoạt rồi, không cho kích hoạt lại
       return;
